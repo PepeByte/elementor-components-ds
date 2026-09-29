@@ -1,0 +1,77 @@
+feature_name: Generic Component Instance Widget Overrides
+problem_statement: >-
+  Component instances must preserve the parent component's container tree and
+  layout while allowing editors to change every inner widget's Content and
+  Style controls for one instance.
+constraints:
+  - The root component container is locked in every instance.
+  - All nested containers are locked in every instance.
+  - Widget Content and Style controls are editable per instance.
+  - Widget Advanced controls are locked.
+  - >-
+    Add, delete, duplicate, move, reorder, nest, and widget-type changes are
+    locked.
+  - >-
+    Carousel slide containers cannot be added, removed, or reordered in
+    instances.
+  - Widgets inside existing carousel slides remain editable.
+  - Instance overrides survive parent value changes.
+  - Non-overridden controls inherit the latest parent value.
+  - Removing a widget from the parent discards its instance overrides.
+  - Each overridden control can be reset to inherit from the parent.
+  - Instance edits must never mutate the parent component.
+out_of_scope:
+  - Editing container settings in an instance.
+  - Structural changes from an instance.
+  - Widget Advanced controls in an instance.
+  - Adding instance-only widgets or carousel slides.
+key_decisions:
+  - decision: Store only sparse widget control overrides per instance.
+    rationale: >-
+      The parent remains the canonical element tree while instances retain only
+      values that differ.
+  - decision: Use parent element IDs and control keys as override identities.
+    rationale: >-
+      Stable identities allow parent updates to merge without copying the full
+      component tree into every consuming page.
+  - decision: >-
+      Lock all containers and expose only inner widget Content and Style
+      controls.
+    rationale: >-
+      This preserves the reusable layout while supporting the editing workflow
+      requested by the user.
+  - decision: Keep an explicit reset-to-parent operation for every override.
+    rationale: >-
+      Editors need a clear way to remove local state and resume inheritance.
+prior_art:
+  - candidate: Native Elementor V4 Components
+    source: https://elementor.com/help/components-2/
+    fit: partial
+    notes: >-
+      Provides native structure locking and exposed General properties, but is
+      Atomic-only and does not expose arbitrary widget Style controls.
+  - candidate: Elementor Global Widgets
+    source: https://elementor.com/help/global-widget-pro/
+    fit: insufficient
+    notes: >-
+      Synchronizes one widget and offers edit or unlink behavior, not a locked
+      multi-widget tree with per-instance child overrides.
+  - candidate: Elementor Saved Templates
+    source: https://developers.elementor.com/docs/data-structure/page-content/
+    fit: insufficient
+    notes: >-
+      Inserts copied trees and does not keep instances synchronized.
+  - candidate: Custom locked shadow instance
+    source: specs/DESIGN_OPTIONS_LATEST.md
+    fit: recommended
+    notes: >-
+      Uses real Elementor widget models for native Content and Style controls
+      while parent source IDs retain structural ownership.
+prior_art_outcome: build
+approved_design: locked-shadow-tree
+spike:
+  path: specs/archive/spikes/SPIKE-design-b-shadow-tree.md
+  result: conditional-go
+  blockers:
+    - Native isLocked does not reject direct structural commands.
+    - Browser editor behavior remains unverified on Elementor 4.1.5.

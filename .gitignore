@@ -1,0 +1,14 @@
+# OS / editor
+.DS_Store
+Thumbs.db
+*.log
+
+# Local agent/tooling state
+~
+/.claude/settings.local.json
+/.pi-subagents/
+
+# Build artifacts
+*.zip
+node_modules/
+vendor/

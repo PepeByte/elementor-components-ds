@@ -1,0 +1,341 @@
+# yamllint disable rule:line-length
+markdown: |
+  # Bug Registry — elementor-components
+
+  | bug_id | date | severity | priority | scope | what_happened | what_expected | steps_to_reproduce | root_cause | files_changed | approach | risk_level | new_tests | type_check | lint | commit_type | release_type | commit_message | follow_ups | file | status |
+  |--------|------|----------|----------|-------|---------------|---------------|--------------------|------------|---------------|----------|------------|-----------|------------|------|-------------|--------------|----------------|------------|------|--------|
+  | BUG-2026-07-22T170455 | 2026-07-22 | critical | p0 | widget-registration | Fatal error on every page load after activating the plugin: the Component Instance widget class is declared before Elementor's base widget class can be loaded, so WordPress shows the critical-error screen and the site is unusable | Plugin activates and loads cleanly on any site with Elementor active | 1. Install the elementor-components plugin in wp-content/plugins 2. Activate it (or load any admin page while active) 3. Site shows "There has been a critical error on this website" | Widget class extending the Elementor base class was declared at plugin bootstrap instead of being required inside the widget-registration hook, so the parent class was not yet loadable | class-component-widget.php; class-component-instance-widget.php (new) | Require the widget class file inside the elementor/widgets/register hook instead of at plugins_loaded bootstrap | low | 0 | pass | pass | fix | patch | fix: defer widget class loading to elementor/widgets/register hook to prevent fatal on activation | none | | fixed |
+  | BUG-2026-07-22T171506 | 2026-07-22 | high | p1 | editor-save-as-component | Right-clicking a supported Elementor element and choosing Save as Component displays "Select an element first" and creates no component | Save as Component uses the element whose context menu was opened and creates a reusable parent component | 1. Open a page in the Elementor editor 2. Right-click a widget, button, or container 3. Choose Save as Component 4. Observe the selection instruction instead of the naming prompt | The action used a generic type-only context-menu hook and later read Elementor's unrelated global selection instead of retaining the documented contextual element view | editor integration script | Register per-element context-menu hooks, capture their documented element view, and pass it directly to the component serializer with global selection only as fallback | low | 0 | pass | pass | fix | patch | fix: save the right-clicked Elementor element as a component | Add a browser-level editor integration check when a WordPress test harness exists | | fixed |
+  | BUG-2026-07-22T173017 | 2026-07-22 | high | p1 | component-library-admin | A saved parent component appears in the Component Instance selector and renders in the editor, but Elementor's Saved Templates screen shows no component record or Component tab | Every saved parent component is visible and editable in Elementor's template library | 1. Save an Elementor element as a component 2. Confirm it appears in a Component Instance selector 3. Open Elementor Saved Templates 4. Observe that the component is absent | Elementor 4.1.5 filters Saved Templates by registered document types, while the plugin registered only a template taxonomy type | component document registration; component admin navigation; documentation | Register a Component library document type so Elementor includes it in the native template tabs and queries; retain the filtered management URL | medium | 0 | pass | pass | fix | patch | fix: register components as Elementor library documents | Retest the Component tab and existing records in Elementor 4.1.5 | | in-progress |
+  | BUG-2026-07-22T173018 | 2026-07-22 | high | p1 | parent-component-editing | A Component Instance renders its parent content but exposes no working way to open and edit that parent; rendered child elements cannot be selected for editing | The instance panel clearly opens the shared parent component for editing while preserving synchronized instances | 1. Add a Component Instance 2. Select a saved component 3. Open the instance controls 4. Observe no Edit Parent Component control and no editable rendered children | The parent-edit action depended on a version-sensitive editor hook and private panel DOM selector instead of an Elementor control | instance controls; editor integration; documentation | Replace DOM injection with Elementor's native Button control and handle its event using the selected instance container | low | 0 | pass | pass | fix | patch | fix: add a native parent component edit control | Per-instance child overrides remain out of scope; retest parent editing in Elementor 4.1.5 | | in-progress |
+  | BUG-2026-07-22T174134 | 2026-07-22 | high | p1 | component-instance-overrides | A Component Instance can select and open its parent but cannot change headline text, button text/link, or button color for only that instance | Instances override explicitly exposed content and style properties while inheriting the parent's layout and unmodified defaults | 1. Create a hero parent component 2. Insert a Component Instance 3. Select the hero parent 4. Try to change the headline or button color only for this instance 5. Observe that no override controls exist | The instance stores only component_id and directly renders the parent document; there is no prop schema, override storage, or render merge layer | component property engine; instance controls; plugin bootstrap; documentation; regression check | Add explicit opt-in markers to supported parent widgets, persist instance override controls, merge content at render time, and emit instance-scoped color CSS without mutating the parent | high | 1 | pass | pass | feat | minor | feat: add explicit per-instance component overrides | Retest in Elementor 4.1.5; add more property types only when requested | | in-progress |
+  | BUG-2026-07-22T181529 | 2026-07-22 | high | p1 | component-instance-overrides | Instance override fields accept values but the rendered hero never changes: heading, subheading, description, button label, and button colors all keep showing parent content | Filled override controls change only that instance while empty fields inherit the parent | 1. Edit a page with a hero Component Instance 2. Fill the Instance Overrides fields 3. Observe the preview keeps showing parent content | The parent had no property markers and there was no default binding fallback, so the override schema was empty; button colors were also stored as global color references that were never resolved | override schema engine; instance widget override resolution; regression check | Add a conventional hero binding fallback when a parent has no markers and resolve global color references from the active kit | medium | 2 | pass | pass | fix | patch | fix: apply instance overrides without parent markers and resolve global colors | Retest overrides and global color picks in Elementor 4.1.5 | | in-progress |
+  | BUG-2026-07-22T181530 | 2026-07-22 | medium | p2 | component-property-coverage | A nested carousel inside a component renders but exposes no per-instance controls for its slides or content | Commonly used widget types can expose useful instance properties | 1. Add a carousel widget to a parent component 2. Insert a Component Instance 3. Open Instance Overrides 4. No carousel-related controls exist | The override system supports only heading, subheading, description, and button properties; carousel slides are repeater data that needs a props/slots model | | | high | | | | | | | Design repeater/slot properties for carousel-type widgets | | open |
+  | BUG-2026-07-31T220000 | 2026-07-31 | high | p1 | component-save-security | Stored XSS: users with edit_posts but without unfiltered_html can store raw <script> content in component _elementor_data via the ec_save_component AJAX handler, and the consumer sync re-persists it into every page using the component. Elementor's own save path kses-filters such users (Utils::kses_post_deep), so the plugin bypassed the platform's sanitization boundary on a site-wide distributed content type | Every write path kses-filters component data for users without unfiltered_html, mirroring Elementor's Document::save() gate, so low-privileged editors cannot plant script into the shared library | 1. Log in as a user with edit_posts but without unfiltered_html (e.g., an Author) 2. POST admin-ajax.php action=ec_save_component with elements JSON containing a text-editor widget whose editor setting is <script>...</script> 3. Insert the published component into a page 4. The script executes for site visitors and inside same-origin Elementor editor previews (admin session) | The plugin's AJAX save handler and sync_consumer write _elementor_data via update_post_meta with no unfiltered_html/kses gate, unlike Elementor's Document::save() which applies Utils::kses_post_deep for non-unfiltered_html users; Elementor's frontend renders the stored data unescaped | class-component-save-handler.php; class-component-sync-manager.php; class-component-cpt.php; tests/component-save-handler-validation-test.php (new); README.md | Apply Elementor's unfiltered_html kses gate on both write paths (save handler and consumer sync); validate element tree shape/depth/size; cap components per user and sync fan-out; exclude trashed consumers; log DB errors instead of echoing them; cache-friendly library query | low | 1 | pass | pass | fix | patch | fix: apply Elementor's unfiltered_html sanitization gate on component save and consumer sync | Add a WordPress-integration test for the kses gate when a WP test harness exists | | fixed |
+  | BUG-2026-07-31T230000 | 2026-07-31 | medium | p2 | hardening-review | Standards review found: load_plugin_textdomain never called so all translations are inert; no Elementor minimum-version guard (fatal on Elementor < 3.8 where Widget_Nested_Base does not exist); no uninstall cleanup (orphaned component posts and _ec_component_ref meta after plugin deletion); the plan-referenced tests/design-b-browser-matrix.md artifact missing; zero tests on the PHP save-path trust boundary (filter_document_save/reconcile_instance) | Text domain actually loads; old Elementor shows an i18n'd notice instead of fatalling; uninstall removes plugin-created data; the browser matrix exists; the save-path reconciliation has standalone regression coverage | 1. Activate on Elementor 3.7 and open any admin page — fatal on elementor/widgets/register 2. Delete the plugin — component posts and _ec_component_ref meta remain 3. Install a translation — strings stay untranslated 4. Inspect tests/ — no coverage of filter_document_save | Bootstrap never loaded the text domain or gated the Elementor version; no uninstall.php existed; the implementation plan referenced a browser matrix that was never created; the sync manager's PHP save path had no standalone test harness | elementor-components.php; uninstall.php (new); class-component-save-handler.php; class-component-sync-manager.php; tests/component-sync-trust-boundary-test.php (new); tests/design-b-browser-matrix.md (new); README.md | Load the text domain in bootstrap; gate bootstrap on EC_MIN_ELEMENTOR_VERSION (3.8.0) with an i18n'd, capability-gated admin notice; add uninstall.php removing component posts and the reference index; i18n AJAX messages; add a WP-stub trust-boundary test for filter_document_save; create the missing browser matrix; bump to 1.1.4 | low | 1 | pass | pass | fix | patch | fix: load text domain, gate Elementor version, add uninstall cleanup, and cover the save-path trust boundary | Run the browser matrix on Elementor 4.1.5; extend the trust-boundary test with a real WP harness to cover sync_consumers fan-out | | fixed |
+  | BUG-2026-09-29T100000 | 2026-09-29 | high | p1 | parent-child-sync | After editing a parent component, every page using it keeps showing the old content until that page is opened in Elementor and Update/Publish is clicked again | Saving the parent updates every consumer page (frontend included) with no per-page action | 1. Create a component and use its instance on several pages 2. Edit the parent and click Update 3. View the pages: old content 4. Re-publish each page: new content | Fan-out wrote the new shadow to _elementor_data but never cleared Elementor's rendered-HTML cache (_elementor_element_cache, 24h) that Document::save() clears; consumer discovery used WP_Query post_type=any (skips exclude_from_search types such as elementor_library headers/footers/popups) and relied on a _ec_component_ref index that unindexed pages lack; fan-out silently skipped everything beyond 500 consumers | class-component-sync-manager.php; class-component-shadow-sync.php; uninstall.php; elementor-components.php; README.md; tests/component-sync-propagation-test.php (new) | Clear render cache + post cache on every consumer write; discover consumers on any post type via index plus instance-data scan with index backfill; stale-only rebuilds in 50-page inline + WP-Cron batches; frontend self-heal on builder_content_data | medium | 1 | pass | pass | fix | patch | fix: propagate parent component edits to all consumer pages without re-publishing | Run the browser matrix on Elementor 4.1.5; nested components (component inside component) are still not cascaded | | fixed |
+
+  ### BUG-2026-07-22T170455: Widget class loaded too early
+
+  **What happened:**
+  Activating the plugin (or loading any page while it is active) crashes the
+  site with a fatal "class not found" error pointing at the Component Instance
+  widget, leaving the site on the WordPress critical-error screen.
+
+  **What I expected:**
+  The plugin activates cleanly and its Component Instance widget appears in the
+  Elementor editor.
+
+  **Steps to reproduce:**
+  1. Place the plugin folder in wp-content/plugins on a site with Elementor
+     active
+  2. Activate the plugin from the Plugins screen
+  3. The site immediately shows the critical-error screen on every page load
+
+  **Additional context:**
+  The plugin bootstrap loads all class files at the earliest plugin hook, but
+  the Component Instance widget inherits from an Elementor base class that is
+  only guaranteed to exist once Elementor fires its widget-registration hook.
+  The fix follows Elementor's canonical addon pattern: the widget class file is
+  required lazily inside that hook, so the parent class is available at
+  declaration time. Consistent failure, not intermittent.
+
+  ### BUG-2026-07-22T171506: Save as Component loses the right-clicked element
+
+  **What happened:**
+  The Save as Component action appears on a valid widget, button, or container,
+  but clicking it says to select an element first and creates no component.
+
+  **What I expected:**
+  The action saves the exact element whose context menu I opened and then
+  prompts me to name the new parent component.
+
+  **Steps to reproduce:**
+  1. Open a page in the Elementor editor
+  2. Right-click a widget, button, or container
+  3. Select Save as Component
+  4. The editor displays the selection instruction instead of the naming prompt
+
+  **Additional context:**
+  Context-menu eligibility and editor selection are different states. The
+  original action knew only the target type, discarded the contextual element,
+  and then queried the editor's global selection. The corrected flow uses
+  Elementor's per-element context-menu contract, which supplies the exact
+  element view to the save action.
+
+  ### BUG-2026-07-22T173017: Parent component hidden from Saved Templates
+
+  **What happened:**
+  A saved parent component is selectable and renders through a Component
+  Instance, but Elementor's Saved Templates screen does not list it or provide
+  a Component tab.
+
+  **What I expected:**
+  Saved parent components appear in Elementor's template library and can be
+  opened for editing.
+
+  **Steps to reproduce:**
+  1. Save an Elementor element as a component
+  2. Confirm the component appears in a Component Instance selector
+  3. Open Elementor Saved Templates
+  4. The saved component is absent from the template list
+
+  **Additional context:**
+  Elementor 4.1.5 builds template tabs and list queries from registered
+  document types. A standalone taxonomy type is enough for plugin-owned
+  selectors, but not for Elementor's management UI. The component is now a
+  first-class Elementor library document; browser retest remains pending.
+
+  ### BUG-2026-07-22T173018: Parent edit control missing from instances
+
+  **What happened:**
+  A Component Instance displays the parent's rendered content but offers no
+  working control to open the parent, and the rendered children are not
+  directly editable.
+
+  **What I expected:**
+  The instance panel provides a clear Edit Parent Component action so shared
+  content can be changed once for every instance.
+
+  **Steps to reproduce:**
+  1. Add a Component Instance to a page
+  2. Select a saved parent component
+  3. Open the instance controls
+  4. No Edit Parent Component control is visible
+
+  **Additional context:**
+  Phase 1 instances intentionally store only a parent reference, so rendered
+  child elements are not editable inline. Parent editing is the supported
+  workflow. The previous convenience control relied on private editor DOM;
+  the replacement is an Elementor-native button control. Browser retest
+  remains pending.
+
+  ### BUG-2026-07-22T174134: Component Instance has no editable properties
+
+  **What happened:**
+  A hero Component Instance can select and render its parent, but it cannot
+  change its own headline, button text/link, or button color.
+
+  **What I expected:**
+  The instance inherits the parent layout while exposing selected content and
+  style properties that can differ for this use only.
+
+  **Steps to reproduce:**
+  1. Create a hero parent component
+  2. Insert a Component Instance on a page
+  3. Select the hero parent component
+  4. Try to change the headline or button color only for this instance
+  5. No per-instance property controls are available
+
+  **Additional context:**
+  The narrow hero-property implementation is superseded by the confirmed
+  generic-widget design. The parent will own every container and structural
+  operation while inner widgets expose native Content and Style controls.
+
+  ### BUG-2026-07-22T181529: Instance overrides silently do nothing
+
+  **What happened:**
+  Every fixed Instance Overrides field was filled in, but the hero preview kept
+  showing the parent's heading, description, button label, and colors.
+
+  **What I expected:**
+  Filled overrides change only that instance while empty values inherit the
+  parent.
+
+  **Steps to reproduce:**
+  1. Open a page containing a hero Component Instance
+  2. Fill the Instance Overrides fields and select button colors
+  3. The rendered hero continues showing parent values
+
+  **Additional context:**
+  The parent contained no property markers, leaving the fixed schema empty.
+  Global button colors were also stored as references that were not resolved.
+  The fixed-field approach is now superseded by generic widget editing.
+
+  ### BUG-2026-07-22T181530: Carousel has no instance properties
+
+  **What happened:**
+  A carousel added to the parent renders inside an instance, but no controls are
+  available for its widgets.
+
+  **What I expected:**
+  Widgets inside existing carousel slides are editable while slide containers
+  and ordering remain locked.
+
+  **Steps to reproduce:**
+  1. Add a carousel widget to a parent component
+  2. Insert the component on a page
+  3. Open the instance editor
+  4. No carousel widget controls are available
+
+  **Additional context:**
+  Carousel support is part of the new generic-widget design. Slide containers
+  stay parent-owned; widgets inside existing slides expose Content and Style.
+
+  ### BUG-2026-07-31T220000: Stored XSS via component save bypasses Elementor's sanitization
+
+  **What happened:**
+  A user with `edit_posts` but without `unfiltered_html` could POST arbitrary
+  Elementor layout JSON to the `ec_save_component` AJAX endpoint and have it
+  stored verbatim as `_elementor_data` of a new, site-wide shared component.
+  Elementor's own save path (`Document::save()`) applies `Utils::kses_post_deep`
+  for such users, so `<script>` content that would have been stripped on a
+  normal Elementor save was persisted, rendered unescaped by the frontend, and
+  propagated into every consumer page's `_elementor_data` by the sync fan-out.
+
+  **What I expected:**
+  Every write path the plugin owns applies the same `unfiltered_html`-gated
+  kses filter as Elementor's `Document::save()`, so contributors and authors
+  cannot plant raw script into the shared library or into other users' posts.
+
+  **Steps to reproduce:**
+  1. Log in as a user with `edit_posts` but without `unfiltered_html`
+     (e.g., an Author)
+  2. POST `action=ec_save_component` with an `elements` payload whose
+     `text-editor` widget `editor` setting is `<script>…</script>`
+  3. Insert the published component on a page
+  4. The script executes for every visitor and inside the same-origin
+     Elementor editor preview when an admin edits the page
+
+  **Root cause:**
+  `ec_save_component` and `sync_consumer` wrote `_elementor_data` directly via
+  `update_post_meta` without the `unfiltered_html`/kses gate that Elementor's
+  `Document::save()` applies on its own save path.
+
+  **Fix:**
+  - `class-component-save-handler.php`: kses gate via
+    `EC_Component_Sync_Manager::kses_post_deep()` when the user lacks
+    `unfiltered_html`; structural element-tree validation (whitelisted
+    `elType`, array-shaped `settings`/`elements`, depth/size caps); per-user
+    component cap; generic error response with logged details.
+  - `class-component-sync-manager.php`: kses gate in `sync_consumer`; consumer
+    fan-out capped at 500, trashed/auto-draft posts excluded, cache-friendly
+    query with `suppress_filters`.
+  - `class-component-cpt.php`: cache-friendly library query.
+  - `tests/component-save-handler-validation-test.php` (new): structural
+    validation cases.
+  - `README.md`: documented the security model.
+
+  **Additional context:**
+  Verified against Elementor master: `core/base/document.php` applies
+  `Utils::kses_post_deep()` when `current_user_can('unfiltered_html')` is
+  false, and `includes/widgets/text-editor.php` outputs widget content
+  unescaped, making the save-time kses the security boundary.
+
+  ### BUG-2026-07-31T230000: Hardening pass — i18n, version guard, uninstall, trust-boundary tests
+
+  **What happened:**
+  A two-axis review (Standards + Spec) of the full plugin found four
+  operational gaps: the text domain was declared and used everywhere
+  (`esc_html__`) but never loaded, so translations were inert; the plugin had
+  no minimum-Elementor version check, fatalling on Elementor < 3.8 where
+  `Widget_Nested_Base` does not exist; deleting the plugin left component
+  library posts and `_ec_component_ref` index meta behind; and the plan's
+  success criterion referencing `tests/design-b-browser-matrix.md` pointed at
+  a file that did not exist, while the PHP save-path trust boundary had no
+  standalone tests.
+
+  **What I expected:**
+  The text domain loads on `plugins_loaded`; old Elementor versions show an
+  i18n'd, capability-gated admin notice instead of fatalling; uninstall
+  removes plugin-created data only; the browser matrix artifact exists; and
+  `filter_document_save`/`reconcile_instance` are covered by a standalone
+  WP-stub test that proves injected structure is discarded and rebuilt from
+  the published parent.
+
+  **Steps to reproduce:**
+  1. Activate the plugin with Elementor 3.7 active and load any admin page —
+     PHP fatal from the missing `Widget_Nested_Base` parent class.
+  2. Delete the plugin from the Plugins screen — component posts and
+     `_ec_component_ref` meta remain in the database.
+  3. Add any translation for the plugin — strings remain untranslated because
+     `load_plugin_textdomain()` is never called.
+  4. Run `tests/` — no case exercises the PHP save-path reconciliation.
+
+  **Root cause:**
+  Bootstrap loaded classes but never loaded the text domain and never checked
+  `ELEMENTOR_VERSION`; no `uninstall.php` existed; the implementation plan
+  referenced a browser matrix that was never created; the sync manager's save
+  path had no standalone test harness because it depends on WordPress
+  functions.
+
+  **Fix:**
+  - `elementor-components.php`: `load_plugin_textdomain()` in bootstrap;
+    `EC_MIN_ELEMENTOR_VERSION` (3.8.0) guard with i18n'd, capability-gated
+    notices; version bumped to 1.1.4.
+  - `uninstall.php` (new): deletes component library posts and
+    `_ec_component_ref` meta; consumer page data left intact by design.
+  - `class-component-save-handler.php` / `class-component-sync-manager.php`:
+    AJAX messages wrapped in `__()` with the text domain.
+  - `tests/component-sync-trust-boundary-test.php` (new): WP-stub skeleton
+    proving injected structure is discarded, runtime IDs never collide with
+    source IDs, all shadow nodes are locked, metadata is recorded, plain
+    documents and component documents pass through untouched, and stale parent
+    versions rebuild deterministically.
+  - `tests/design-b-browser-matrix.md` (new): the plan-referenced browser
+    verification checklist (selection, locks, overrides, parent sync, history,
+    carousel) with per-case status.
+
+  **Additional context:**
+  All checks pass under PHP 8.2.29 (`php -l`, all five standalone test
+  scripts) and `node --check assets/editor.js`. The browser matrix still needs
+  to be executed on a real Elementor 4.1.5 runtime.
+
+  ### BUG-2026-09-29T100000: Parent edits require re-publishing every consumer page
+
+  **What happened:**
+  After changing a parent component and clicking Update, pages that use it kept
+  showing the old content until each page was opened in Elementor and
+  re-published. With a component on 100 pages that meant 100 manual publishes.
+
+  **What I expected:**
+  Updating the parent updates every consumer page, on the frontend, with no
+  per-page action.
+
+  **Root cause:**
+  1. `sync_consumer` rewrote `_elementor_data` and deleted the page CSS but left
+     Elementor's per-document rendered-HTML cache (`_elementor_element_cache`,
+     24h TTL) in place, so the frontend served the pre-sync markup. An editor
+     Update clears it in `Document::save()`, which is why re-publishing "fixed"
+     the page. Nothing fired `save_post`/`clean_post_cache` either, so object and
+     page caches were not purged.
+  2. Consumers were found with `WP_Query` `post_type => any`, which excludes
+     `exclude_from_search` types (`elementor_library`: Theme Builder headers,
+     footers, popups), and only via the `_ec_component_ref` index, which pages
+     created by import, duplication, REST/MCP tooling or older versions lack.
+  3. Fan-out was capped at 500 consumers; the rest were logged and skipped.
+
+  **Fix:**
+  - Every consumer write now clears CSS, `_elementor_element_cache` and the post
+    cache and fires `ec_consumer_synced`.
+  - Discovery: index plus a scan of instance data on any live post type, with
+    index backfill; component documents are excluded.
+  - Fan-out rebuilds only stale shadows (`parent_version` mismatch), 50 inline
+    then WP-Cron batches; no consumer is dropped; the capability gate is
+    captured at save time so cron batches behave like the original request.
+  - Frontend self-heal on `elementor/frontend/builder_content_data`: a stale
+    shadow is rebuilt before render, persisted once, caches dropped; instances
+    whose parent is unavailable are left untouched.
+  - `tests/component-sync-propagation-test.php` covers discovery, batching,
+    stale-only rebuilds, cache invalidation and self-heal.
+
+  **Additional context:**
+  Not yet run against a live Elementor 4.1.5 editor. Nested components
+  (a component containing another component's instance) are not cascaded.
+
+  **Follow-up (2026-09-29): performance pass.** Control policies cached per
+  widget type (option, fingerprinted, 24h TTL); editor sync batched into one
+  request per page with no rebuild of already-current children; parent version
+  cached on the component keyed by a hash of its data. Tests:
+  `component-policy-cache-test.php`, extended `component-sync-propagation-test.php`,
+  `editor-sync-batch-test.js`.
+
+  **Follow-up (2026-09-29): scale and maintenance pass (1.3.0).** Picker list
+  cached and flushed on component changes; opt-in compact storage (instances
+  saved without children, expanded at render via the widget and at CSS time via
+  `elementor/element/before_parse_css` + `add_child()`); Component Sync admin
+  screen with usage/out-of-date report, forced resync and storage toggle; WP-CLI
+  `wp ec status|sync`; CSS pre-warming in cron batches (never inline). Tests:
+  `component-storage-and-tools-test.php`, extended contract test. Not yet run
+  against a live Elementor: compact storage must be verified visually (markup and
+  CSS of an expanded instance vs a stored one) before it is enabled on a site.
